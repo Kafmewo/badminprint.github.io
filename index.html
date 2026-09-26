@@ -183,9 +183,19 @@ h1,h2,h3,h4{font-family:var(--font-display)}
   background:color-mix(in srgb,var(--bg) 86%,transparent);
   backdrop-filter:blur(14px) saturate(150%);position:sticky;top:0;z-index:30;
 }
-.topbar h1{font-size:17.5px;font-weight:800;margin:0;letter-spacing:.1px}
-.topbar .sub{font-size:12.5px;color:var(--text-3);margin-left:-6px}
-.topbar-actions{margin-left:auto;display:flex;align-items:center;gap:8px}
+/* 标题栏：h1 / sub / actions 都是 flex item，默认都会收缩。
+   窄屏下 h1 被压到容器宽度以下就会把「仪表盘」拆成两行，
+   于是文字溢出 62px 高的 header —— 这就是移动端顶部错位的根因。
+   对策：三者一律禁止换行，宁可省略号也不折行；操作区干脆不收缩。 */
+.topbar h1{
+  font-size:17.5px;font-weight:800;margin:0;letter-spacing:.1px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;
+}
+.topbar .sub{
+  font-size:12.5px;color:var(--text-3);margin-left:-6px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;
+}
+.topbar-actions{margin-left:auto;display:flex;align-items:center;gap:8px;flex:0 0 auto}
 .view{padding:22px;max-width:1440px;width:100%;margin:0 auto;flex:1}
 .view[hidden]{display:none}
 
@@ -194,13 +204,22 @@ h1,h2,h3,h4{font-family:var(--font-display)}
   background:var(--bg-elev);border:1.5px solid var(--border);border-radius:var(--r);
   box-shadow:var(--shadow-sm);
 }
+/* 卡片头 = 三个槽位：标题 / 描述 / 右侧操作。
+   标题是硬约束：`flex:0 0 auto` + `nowrap` —— 它**不参与收缩**，任何宽度下都必须单行。
+   此前三个槽位都可收缩，中文的最小内容宽度只有一个字，于是窄屏下标题被压到
+   3 个字宽、折成「分项战 / 绩」。现在的取舍很明确：宁可让描述折行，也不让标题折行。 */
 .card-head{
   display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1.5px solid var(--border);
 }
-.card-head h3{margin:0;font-size:14.5px;font-weight:800;letter-spacing:.1px}
-.card-head .hint{font-size:12px;color:var(--text-3);font-weight:500}
+.card-head h3{
+  margin:0;font-size:14.5px;font-weight:800;letter-spacing:.1px;
+  flex:0 0 auto;white-space:nowrap;
+}
+/* min-width:0 让描述能被压缩而不是把整行撑破；它才是该让位的那个 */
+.card-head .hint{font-size:12px;color:var(--text-3);font-weight:500;min-width:0}
 .card-body{padding:16px}
-.card-head .right{margin-left:auto;display:flex;gap:6px;align-items:center}
+/* 操作区同样不收缩：按钮文字一旦折行比溢出更难看 */
+.card-head .right{margin-left:auto;display:flex;gap:6px;align-items:center;flex:0 0 auto}
 
 /* ============ 5. 按钮：圆润但有明确边界 ============ */
 .btn{
@@ -233,6 +252,31 @@ h1,h2,h3,h4{font-family:var(--font-display)}
 /* 危险动作一律走"胜"色（红系），与原版一致：删除 = 红 */
 .btn-danger{color:var(--win);border-color:color-mix(in srgb,var(--win) 45%,var(--border))}
 .btn-danger:hover{background:var(--win-soft);border-color:var(--win)}
+
+/* 并列按钮一律等宽：这类按钮组要用 .btn-grid，不能用 .row。
+   flex + wrap 下按钮宽度由文案长度决定 —— 换行点随机、每行右端参差
+   （实测 360px 两行右留白 7 / 37 不齐；320px 更是直接碎成 5 行，一行一个）。
+   网格把「等宽 + 对齐」变成结构保证，不再靠文案长度碰运气。
+   配套约定：同组按钮文案统一写成「动作 + 格式」，长度接近，网格才不会一胖一瘦。
+   危险按钮**永远另起一行靠右**，不跟普通按钮抢同一行 —— 一来与普通操作分离，
+   二来避免"4 个按钮 + 危险按钮同行"逼出溢出：921px 处侧边栏出现、容器骤降到
+   613px，5 个挤一行时「打印 / PDF」会被压到 111px（内容需 118px）而溢出。
+   阈值 640px 由"4 列要放得下最宽的按钮"反推并留缓冲：容器 573px → 每列 136px，
+   而最宽的「打印 / PDF」自然宽度 120px（余 ~16px，够跨平台字体差异）。 */
+.btn-grid{display:grid;gap:9px;align-items:center;grid-template-columns:repeat(2,minmax(0,1fr))}
+.btn-grid > .btn{min-width:0}
+/* 危险操作另起一行、靠右：与普通操作分离，又不占满整行去抢视觉权重 */
+.btn-grid > .btn-wide{grid-column:1 / -1;justify-self:end}
+@media(min-width:640px){
+  /* 一行四个等宽（危险按钮仍独占下一行，全尺寸结构一致） */
+  .btn-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+}
+/* 极窄屏（≤340px，如 iPhone SE）把左右内边距收到 11px 留出缓冲：
+   320px 两列网格每列 127.5px，最宽的「打印 / PDF」自然宽度 120.5px —— 只剩 7px，
+   而文字宽度随渲染字体浮动（系统字体换一个就可能顶破边框）。收窄后余量 ~13px。 */
+@media(max-width:340px){
+  .btn-grid > .btn{padding-left:11px;padding-right:11px}
+}
 
 /* ============ 6. 表单 ============ */
 .field{display:flex;flex-direction:column;gap:5px;min-width:0}
@@ -356,6 +400,61 @@ tbody tr:last-child td{border-bottom:0}
   border-color:var(--border-strong);box-shadow:var(--shadow-sm);
 }
 
+/* 周期下拉（原来是 4 个 .seg 胶囊，窄屏会把标题挤到换行）
+   为什么自绘而不是 <select>：原生展开层由系统渲染，圆角/描边/投影/选中高亮一律改不了，
+   孤零零一个系统白框放进这套「墨色描边 + 大圆角 + 糖果色」的语言里会格外突兀。
+   视觉不引入任何新色值，全部复用既有令牌：
+     触发键  = 迷你 .btn（同样的 border-strong 边框 + bg-elev 底，hover 转 bg-hover + ink 边）
+     展开面板 = .modal 的墨色描边 + .card 的白底 + --shadow-lg 浮层投影
+     选中项  = .tag-accent 的 accent-soft 底 + accent 文字 + 对勾 */
+.range-pick{position:relative;flex:0 0 auto}
+.range-btn{
+  display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 10px;
+  border:1.5px solid var(--border-strong);border-radius:var(--r-sm);
+  background:var(--bg-elev);color:var(--text);
+  font-family:var(--font-display);font-size:12.5px;font-weight:700;white-space:nowrap;
+  transition:background var(--d-fast),border-color var(--d-fast),box-shadow var(--d-fast),transform var(--d-fast) var(--spring);
+}
+.range-btn:hover{background:var(--bg-hover);border-color:var(--ink)}
+.range-btn:active{transform:translateY(1px) scale(.98)}
+.range-btn .ico{flex:0 0 13px;width:13px;height:13px;opacity:.7}
+.range-btn .chev{flex:0 0 11px;width:11px;height:11px;opacity:.6;transition:transform var(--d) var(--spring)}
+.range-btn[aria-expanded="true"]{
+  border-color:var(--accent);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 17%,transparent);
+}
+.range-btn[aria-expanded="true"] .chev{transform:rotate(180deg);opacity:.9}
+
+/* 展开面板：右对齐挂在触发键下方，宽度由最长选项决定 */
+.range-menu{
+  position:absolute;right:0;top:calc(100% + 7px);z-index:60;
+  min-width:100%;width:max-content;padding:5px;
+  border:1.5px solid var(--ink);border-radius:var(--r);
+  background:var(--bg-elev);box-shadow:var(--shadow-lg);
+  animation:rangeIn var(--d) var(--spring);
+}
+.range-menu[hidden]{display:none}
+@keyframes rangeIn{from{opacity:0;transform:translateY(-6px) scale(.97)}to{opacity:1;transform:none}}
+.range-opt{
+  display:flex;align-items:center;gap:8px;width:100%;padding:8px 10px;
+  border:0;background:transparent;border-radius:var(--r-xs);
+  color:var(--text-2);font-family:var(--font-display);font-size:12.5px;font-weight:700;
+  text-align:left;white-space:nowrap;cursor:pointer;
+  transition:background var(--d-fast),color var(--d-fast);
+}
+.range-opt:hover{background:var(--bg-hover);color:var(--text)}
+.range-opt .tick{flex:0 0 13px;width:13px;height:13px;margin-left:auto;opacity:0;transition:opacity var(--d-fast)}
+/* .on 写在 hover 之后：同一特异性下后写者胜，选中项悬停时不会被 bg-hover 冲掉。
+   内描边用 inset box-shadow 而不是 border —— 加 border 会让选中项比其它项高 3px，行距就不齐了。 */
+.range-opt.on{
+  background:var(--accent-soft);color:color-mix(in srgb,var(--accent) 78%,var(--ink));
+  box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--accent) 42%,transparent);
+}
+.range-opt.on .tick{opacity:1}
+/* 焦点环内缩到选项内部：全局 :focus-visible 是 3px + offset 2px，向外扩会正好填满面板
+   padding，让当前项的可见边界比其它项大一圈 —— 内缩后与上面的内描边叠在一起，行距齐平。 */
+.range-opt:focus-visible{outline-offset:-3px}
+
 /* ============ 13. 进度条 ============ */
 .bar{height:8px;border-radius:20px;background:var(--track);overflow:hidden}
 .bar > i{
@@ -437,24 +536,29 @@ tbody tr:last-child td{border-bottom:0}
 .tl-body{font-size:13px;color:var(--text-2);margin-top:3px}
 
 /* ============ 19. 移动端导航 ============ */
+/* 悬浮导航（浮岛）：不再全宽贴底，而是左右内缩、离屏底留距的圆角胶囊。
+   语言与项目其它浮动件一致 —— 墨色描边（.modal/.range-menu）+ 实体底影（--sticker，.fab），
+   底色仍是毛玻璃。浮岛下方与两侧露出页面内容，滚动时从球下面穿过。 */
 .tabbar{
-  display:none;position:fixed;bottom:0;left:0;right:0;height:calc(60px + env(safe-area-inset-bottom));
-  padding-bottom:env(safe-area-inset-bottom);
-  background:color-mix(in srgb,var(--bg-elev) 94%,transparent);
+  display:none;position:fixed;left:12px;right:12px;
+  bottom:calc(10px + env(safe-area-inset-bottom));
+  background:color-mix(in srgb,var(--bg-elev) 92%,transparent);
   backdrop-filter:blur(16px) saturate(160%);
-  border-top:1.5px solid var(--border);z-index:50;
+  border:1.5px solid var(--ink);border-radius:var(--r-lg);
+  box-shadow:0 4px 0 var(--ink),var(--shadow-lg);z-index:50;
 }
-.tabbar-inner{display:flex;height:60px}
+.tabbar-inner{display:flex;height:56px}
 .tab{
-  flex:1 1 0;min-width:0;padding:0 2px;border:0;background:transparent;color:var(--text-3);
+  flex:1 1 0;min-width:0;margin:0 5px;padding:0 2px;border:0;background:transparent;color:var(--text-3);
   display:flex;flex-direction:column;
   align-items:center;justify-content:center;gap:2px;font-size:10px;font-weight:750;
-  transition:color var(--d-fast),transform var(--d-fast) var(--spring);font-family:var(--font-display);
+  border-radius:var(--r-sm);
+  transition:color var(--d-fast),background var(--d-fast),transform var(--d-fast) var(--spring);font-family:var(--font-display);
 }
 .tab span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tab svg{width:21px;height:21px;flex:0 0 auto}
 .tab:active{transform:scale(.92)}
-.tab.on{color:var(--accent)}
+.tab.on{color:var(--accent);background:var(--accent-soft)}
 .tab.on svg{animation:popIn var(--d) var(--spring)}
 
 /* 「更多」底部面板 */
@@ -469,8 +573,9 @@ tbody tr:last-child td{border-bottom:0}
 @keyframes sheetUp{from{transform:translateY(26px);opacity:0}to{transform:none;opacity:1}}
 
 .mobile-only{display:none}
+/* bottom：浮岛顶 = 10(离底) + 56(高) + 4(实体底影) ≈ 70px，再留 14px 呼吸 */
 .fab{
-  position:fixed;right:16px;bottom:calc(74px + env(safe-area-inset-bottom));width:56px;height:56px;border-radius:50%;
+  position:fixed;right:16px;bottom:calc(84px + env(safe-area-inset-bottom));width:56px;height:56px;border-radius:50%;
   background:linear-gradient(150deg,var(--accent),var(--warn));color:#fff;
   border:2px solid var(--ink);display:none;align-items:center;justify-content:center;
   box-shadow:0 6px 0 var(--ink),0 12px 26px rgba(255,122,69,.35);z-index:51;
@@ -709,10 +814,15 @@ tbody tr:last-child td{border-bottom:0}
   .tabbar{display:block}
   .mobile-only{display:flex}
   .fab{display:flex}
-  .view{padding:16px 14px 88px}
-  .topbar{padding:0 14px}
+  /* 浮岛占位：10(离底) + 56(高) ≈ 70px + 底影，加 safe-area 与呼吸空间 */
+  .view{padding:16px 14px calc(96px + env(safe-area-inset-bottom))}
+  .topbar{padding:0 14px;gap:10px}
   .topbar h1{font-size:16px}
   .topbar .sub{display:none}
+  .topbar-actions{gap:6px}
+  /* 自绘按钮不是表单控件，不触发 iOS「字号 <16px 则聚焦缩放整页」那套行为，
+     所以这里可以放心压到 13px 换宽度 */
+  .range-btn{height:36px;font-size:13px;padding:0 9px}
   .g2,.g3,.g4,.ratio-16-10,.ratio-13-10,.ratio-10-12{grid-template-columns:minmax(0,1fr)}
   .span-2{grid-column:span 1}
   .filters .field{flex:1 1 130px;min-width:0}
@@ -725,6 +835,26 @@ tbody tr:last-child td{border-bottom:0}
 @media(max-width:560px){
   .stat-value{font-size:26px}
   .card-body{padding:13px}
+  /* 卡片头：360px 屏上「标题 + 描述 + 查看记录」并排要 310px，可用只有 297px ——
+     差 13px 的结果是三个都收缩，标题被压折。窄屏改为两行：
+     第一行「标题 + 操作」，第二行描述独占整行。
+     描述换行后拿到的是整行宽度（297px），13 字的文案反而能单行放下了。 */
+  /* 第一列的 min 用 min-content 而不是 0：`1fr` 只承担"剩余空间"，
+     320px 屏上「自评记录」卡右侧塞了两个按钮（补记单项 + 开始自评，205px），
+     剩余只剩 48px —— 若允许压到 0，标题就被挤成两行。
+     改成 min-content 后标题先拿到它需要的整宽，压力转给右侧（见下方 .right）。 */
+  .card-head{
+    display:grid;grid-template-columns:minmax(min-content,1fr) minmax(0,max-content);
+    column-gap:8px;row-gap:3px;padding:12px 14px;
+  }
+  /* ellipsis 是兜底：正常标题都放得下，防的是以后加进来的超长文案 */
+  .card-head h3{min-width:0;overflow:hidden;text-overflow:ellipsis}
+  .card-head .hint{grid-column:1 / -1}
+  /* 极窄屏放得下两个按钮就并排（自评记录卡），放不下就竖排，不横向溢出 */
+  .card-head .right{
+    grid-column:2;grid-row:1;margin-left:0;
+    flex-wrap:wrap;justify-content:flex-end;
+  }
   .modal-body{padding:15px}
   .masonry{column-count:1}
   .hero{border-radius:var(--r-lg);box-shadow:0 4px 0 var(--ink)}
@@ -733,6 +863,15 @@ tbody tr:last-child td{border-bottom:0}
   .av-grid{grid-template-columns:repeat(auto-fill,minmax(52px,1fr));gap:7px}
   .pv-head{padding:10px 12px;gap:11px}
   .pv-head .avatar{width:46px;height:46px;flex:0 0 46px;font-size:16px}
+}
+/* 极窄屏（≤340px，如 iPhone 5 / SE 一代的 320px）：最长的标题是 5 个字「目标里程碑」，
+   此时把「记录」收成纯图标腾出空间。功能不丢 —— 右下角 FAB 是同一个入口。
+   360px 及以上不需要这一步：实测还有 34px 余量，文案保留更易读。 */
+@media(max-width:340px){
+  .topbar{gap:8px}
+  .range-btn{padding:0 8px;gap:5px}
+  #quickAdd{padding:7px 11px}
+  #quickAdd span{display:none}
 }
 @media(min-width:921px){ .fab{display:none !important} }
 
@@ -1035,11 +1174,18 @@ html[data-theme="dark"]{ --score-hi:var(--win); --score-mid:var(--accent); --sco
       <h1 id="pageTitle">仪表盘</h1>
       <span class="sub" id="pageSub"></span>
       <div class="topbar-actions">
-        <div class="seg" id="rangeSeg" title="统计范围">
-          <button data-range="30">30天</button>
-          <button data-range="90" class="on">90天</button>
-          <button data-range="365">1年</button>
-          <button data-range="0">全部</button>
+        <!-- 统计范围：自绘下拉。原先是 4 个胶囊按钮，在 360px 屏上要吃掉 210px，
+             把「仪表盘」挤成两行 —— 换成下拉后只占 ~120px。
+             用自绘而不是 <select>：原生展开层由系统渲染，圆角/描边/投影/高亮都改不了，
+             放进这套插画语言里会格外突兀。 -->
+        <div class="range-pick" id="rangePick">
+          <button class="range-btn" id="rangeBtn" type="button"
+                  aria-haspopup="listbox" aria-expanded="false" aria-label="统计范围">
+            <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>
+            <span id="rangeLabel">近 90 天</span>
+            <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="range-menu" id="rangeMenu" role="listbox" aria-label="统计范围" hidden></div>
         </div>
         <button class="btn btn-primary" id="quickAdd">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
@@ -1103,7 +1249,7 @@ const DEFAULTS = {
    suggestScore，所以这里的函数必须自包含（不依赖 clamp / sum 等后置定义的常量）。
 */
 const TECH_ITEMS = [
-  { id: "serve_short",  name: "发球（小球）", cat: "技术",
+  { id: "serve_short",  name: "发球（小球）", short: "小球发球", cat: "技术",
     def: "反手或正手发网前小球，目标是过网贴前发球线，让对手无法直接下压进攻。",
     obs: [
       { q: "连续发 10 次小球，过网且落点在对方前发球线后 30cm 以内的次数", o: [
@@ -1118,7 +1264,7 @@ const TECH_ITEMS = [
       { r: "9–10", t: "贴网且稳定，能按对手站位变化发不同落点" }
     ] },
 
-  { id: "serve_long",   name: "发球（高远）", cat: "技术",
+  { id: "serve_long",   name: "发球（高远）", short: "高远发球", cat: "技术",
     def: "正手发高远球，把球送到对方后场底线，为自己争取回位与防守准备时间。",
     obs: [
       { q: "连续发 10 次高远球，落点进入对方后场最后 1/3 区域的次数", o: [
@@ -1133,7 +1279,7 @@ const TECH_ITEMS = [
       { r: "9–10", t: "高度与深度稳定，能按对手站位选择后场两角" }
     ] },
 
-  { id: "clear",        name: "高远球", cat: "技术",
+  { id: "clear",        name: "高远球", short: "高远球", cat: "技术",
     def: "被压后场时把球顶到底线的过渡球，考验到位程度与出手一致性。",
     obs: [
       { q: "被动防守中打 10 次高远球，能把球顶到对方后场最后 1/3 的次数", o: [
@@ -1148,7 +1294,7 @@ const TECH_ITEMS = [
       { r: "9–10", t: "深度与弧度可控，能主动用高远改变节奏" }
     ] },
 
-  { id: "smash",        name: "杀球", cat: "技术",
+  { id: "smash",        name: "杀球", short: "杀球", cat: "技术",
     def: "后场或中场的高点下压进攻，看成功率、落点控制与杀后连贯。",
     obs: [
       { q: "10 次杀球机会中，能在界内形成有效下压的次数", o: [
@@ -1163,7 +1309,7 @@ const TECH_ITEMS = [
       { r: "9–10", t: "稳定得分手段，角度与节奏可调，杀后能立即衔接" }
     ] },
 
-  { id: "drop",         name: "吊球", cat: "技术",
+  { id: "drop",         name: "吊球", short: "吊球", cat: "技术",
     def: "用与高远球相近的动作把球轻放对方前场，目的是破坏对手站位与节奏。",
     obs: [
       { q: "10 次吊球中，过网且落在对方前场 1/3 区域的次数", o: [
@@ -1178,7 +1324,7 @@ const TECH_ITEMS = [
       { r: "9–10", t: "能精准控制前后落点，动作与重杀无异，成为得分手段" }
     ] },
 
-  { id: "net",          name: "网前球", cat: "技术",
+  { id: "net",          name: "网前球", short: "网前球", cat: "技术",
     def: "网前搓球、推球与扑球的总和，双打里是抢主动权的第一战场。",
     obs: [
       { q: "10 次网前机会球中，处理成功（过网且不失误）的次数", o: [
@@ -1193,7 +1339,7 @@ const TECH_ITEMS = [
       { r: "9–10", t: "稳定抢高，搓、推、扑按需切换，为后场搭档创造机会" }
     ] },
 
-  { id: "drive",        name: "平抽挡", cat: "技术",
+  { id: "drive",        name: "平抽挡", short: "平抽挡", cat: "技术",
     def: "中场相持中的快速对抽，考验反应、拍面稳定与落点压制。",
     obs: [
       { q: "连续平抽挡相持 10 拍，其中自己先失误（下网或出界）的拍数", o: [
@@ -1208,7 +1354,7 @@ const TECH_ITEMS = [
       { r: "9–10", t: "相持中能主动变线加力，把相持转成进攻" }
     ] },
 
-  { id: "defense",      name: "防守接杀", cat: "技术",
+  { id: "defense",      name: "防守接杀", short: "防守接杀", cat: "技术",
     def: "面对杀球时的挡网、抽球与变线能力，双打里决定失分速度。",
     obs: [
       { q: "10 次接杀中，能挡回对方场内（不失误）的次数", o: [
@@ -1223,7 +1369,7 @@ const TECH_ITEMS = [
       { r: "9–10", t: "能预判线路，变线或反抽直接摆脱被动" }
     ] },
 
-  { id: "backhand_rear", name: "反手后场球", cat: "技术",
+  { id: "backhand_rear", name: "反手后场球", short: "反手后场", cat: "技术",
     def: "背对球网时用反手把后场球送到对方底线或近网，是被动局面下最关键的一拍过渡球。",
     obs: [
       { q: "10 次被迫用反手处理后场球，能把球送到对方后场最后 1/3 的次数", o: [
@@ -1238,7 +1384,7 @@ const TECH_ITEMS = [
       { r: "9–10", t: "反手高远与反手吊球动作一致，能主动选路线摆脱被动" }
     ] },
 
-  { id: "backhand_drive", name: "反手平抽挡", cat: "技术",
+  { id: "backhand_drive", name: "反手平抽挡", short: "反手平抽", cat: "技术",
     def: "中场用反手完成对抽与反抽，考验握拍转换速度与拍面稳定性，是双打中路的常见战场。",
     obs: [
       { q: "连续反手平抽挡 10 拍，其中自己先失误（下网或出界）的拍数", o: [
@@ -1253,7 +1399,7 @@ const TECH_ITEMS = [
       { r: "9–10", t: "反手能主动变线加力反抽，相持中不弱于正手" }
     ] },
 
-  { id: "backhand_net", name: "反手网前球", cat: "技术",
+  { id: "backhand_net", name: "反手网前球", short: "反手网前", cat: "技术",
     def: "网前用反手完成搓球、推球与扑球，双打里反手位网前是抢先与防守的关键点。",
     obs: [
       { q: "10 次反手网前处理中，成功过网且不失误的次数", o: [
@@ -1268,7 +1414,7 @@ const TECH_ITEMS = [
       { r: "9–10", t: "反手搓、推、扑按需切换，反手位网前反而成为优势" }
     ] },
 
-  { id: "footwork",     name: "步伐", cat: "身体",
+  { id: "footwork",     name: "步伐", short: "步伐", cat: "身体",
     def: "启动、移动与回中的整体效率，是所有技术的地基。",
     obs: [
       { q: "一场 21 分制里，因启动慢或回位不到而明显丢分的次数", o: [
@@ -1283,7 +1429,7 @@ const TECH_ITEMS = [
       { r: "9–10", t: "重心低、启动快，能预判先动并合理使用交叉步" }
     ] },
 
-  { id: "stamina",      name: "体能耐力", cat: "身体",
+  { id: "stamina",      name: "体能耐力", short: "体能耐力", cat: "身体",
     def: "一场或连续多局中，动作质量与技术稳定性的维持能力。",
     obs: [
       { q: "连续打 21 分制比赛，动作开始明显变形是在第几局", o: [
@@ -1298,7 +1444,7 @@ const TECH_ITEMS = [
       { r: "9–10", t: "连续多局稳定、恢复快，末局质量不降" }
     ] },
 
-  { id: "power",        name: "爆发力", cat: "身体",
+  { id: "power",        name: "爆发力", short: "爆发力", cat: "身体",
     def: "蹬转起跳与手腕发力的短时输出能力。",
     obs: [
       { q: "10 次后场进攻机会中，能完成起跳杀球的次数", o: [
@@ -1313,7 +1459,7 @@ const TECH_ITEMS = [
       { r: "9–10", t: "爆发力强，杀球可直接得分且不显著影响后续体能" }
     ] },
 
-  { id: "agility",      name: "灵敏协调", cat: "身体",
+  { id: "agility",      name: "灵敏协调", short: "灵敏协调", cat: "身体",
     def: "突发变向时的反应速度与身体控制，含非持拍手的配合。",
     obs: [
       { q: "10 次对手突然变向（吊球 / 变线）中，能第一时间启动反应的次数", o: [
@@ -1328,7 +1474,7 @@ const TECH_ITEMS = [
       { r: "9–10", t: "身体控制好，能连续变向并保持击球质量" }
     ] },
 
-  { id: "tactic",       name: "战术意识", cat: "意识",
+  { id: "tactic",       name: "战术意识", short: "战术意识", cat: "意识",
     def: "赛前有计划、赛中能观察对手并调整的能力。",
     obs: [
       { q: "最近 10 次上场中，能从头到尾坚持一个既定战术的次数", o: [
@@ -1343,7 +1489,7 @@ const TECH_ITEMS = [
       { r: "9–10", t: "能读比赛、随比分切换战术，主动控制节奏" }
     ] },
 
-  { id: "mental",       name: "心理稳定", cat: "意识",
+  { id: "mental",       name: "心理稳定", short: "心理稳定", cat: "意识",
     def: "落后与关键分时的情绪与决策稳定性。",
     obs: [
       { q: "最近 5 场比赛中，比分落后（如 8:14）后能稳住不再连续丢分的场次", o: [
@@ -1358,7 +1504,7 @@ const TECH_ITEMS = [
       { r: "9–10", t: "关键分敢打敢拼，能把压力交给对手" }
     ] },
 
-  { id: "positioning",  name: "跑位判断", cat: "意识",
+  { id: "positioning",  name: "跑位判断", short: "跑位判断", cat: "意识",
     def: "双打中的站位、轮转与补位判断，含与搭档的分工默契。",
     obs: [
       { q: "一场 21 分制中，与搭档抢球 / 撞拍 / 漏球的次数", o: [
@@ -1808,8 +1954,12 @@ const chart = {
 
   /* 雷达图 */
   radar(el, opt){
-    const { items = [], height = 300 } = opt; // items: [{name, value(0-10)}]
-    if(!items.length){ el.innerHTML = emptyChart(height, "暂无数据"); return; }
+    const { items = [], height = 300, empty = "暂无数据" } = opt; // items: [{name, value(0-10)}]
+    if(!items.length){ el.innerHTML = emptyChart(height, empty); return; }
+    /* 「全为 0」不等价于「自评 0 分」——锚点最低就是 1 分，0 分不是合法自评值。
+       所以全 0 只可能是「一次都没打过」，此时数据多边形会塌缩成中心的一个点，
+       看着像图坏了。换成空状态，顺便告诉用户去哪打这个分。 */
+    if(!items.some(it => +it.value > 0)){ el.innerHTML = emptyChart(height, empty); return; }
     const n = items.length;
     /* 轴数 > 12 时放大画布并交错标签半径：相邻标签一远一近，中文不再压字 */
     const dense = n > 12;
@@ -3101,14 +3251,16 @@ function renderDashboard(root){
   });
 
   /* --- 雷达 --- */
+  /* 标签一律走 t.short：名字不在这里做字符串裁剪。
+     曾经写成 `t.name.slice(0,4)`，把「发球（小球）」切成「发球（小」——半截括号。 */
   const radarItems = ["技术","身体","意识"].flatMap(cat =>
     TECH_ITEMS.filter(t => t.cat === cat).map(t => {
       const c = skillCurrent(t.id);
-      return { name: t.name.length > 4 ? t.name.slice(0,4) : t.name, value: c ? c.score : 0, cat };
+      return { name: t.short, value: c ? c.score : 0, cat };
     })
   );
   const rdEl = $("#radarChart");
-  if(rdEl) chart.radar(rdEl, { items: radarItems });
+  if(rdEl) chart.radar(rdEl, { items: radarItems, empty: "还没有自评记录 —— 去技术评估打一次分" });
 
   /* --- 技术成长对比 --- */
   const cmpEl = $("#skillCompare");
@@ -3771,9 +3923,11 @@ function renderSkills(root){
     </div>`;
   }).join("");
 
-  /* 雷达 */
-  const items = TECH_ITEMS.map(t => { const c = skillCurrent(t.id); return { name: t.name.replace(/（.*?）/,""), value: c ? c.score : 0 }; });
-  chart.radar($("#skillRadar"), { items });
+  /* 雷达：标签走 t.short。
+     曾经写成 `t.name.replace(/（.*?）/)`——「发球（小球）」与「发球（高远）」
+     削掉括号后同化为「发球」，雷达图上出现两个一模一样的轴，无法区分。 */
+  const items = TECH_ITEMS.map(t => { const c = skillCurrent(t.id); return { name: t.short, value: c ? c.score : 0 }; });
+  chart.radar($("#skillRadar"), { items, empty: "还没有自评记录 —— 用同一套标准把 18 个专项打一次分" });
 
   /* 分类横条 */
   $("#skillBars").innerHTML = TECH_CATS.map(cat => TECH_CAT_ITEMS(cat).map(t => {
@@ -5172,13 +5326,17 @@ function renderProfile(root){
       <div class="card" style="grid-column:1/-1">
         <div class="card-head"><h3>数据管理</h3><span class="hint">导出 / 导入 / 清空</span></div>
         <div class="card-body">
-          <div class="row" style="gap:9px">
-            <button class="btn" id="expJson">${icon("down")}导出 JSON 备份</button>
-            <button class="btn" id="expCsv">${icon("down")}导出记录 CSV</button>
-            <button class="btn" id="impBtn">${icon("up")}导入 JSON</button>
+          <!-- 按钮组走 .btn-grid（等宽网格），不能再用 .row —— flex+wrap 下按钮宽度
+               由文案长度决定，换行点随机、每行右端参差，320px 屏上会碎成 5 行。
+               文案统一成「动作 + 格式」，四个长度接近，网格才不会一边胖一边瘦；
+               完整说明放进 title，移动端看短标签、桌面悬停看全称。 -->
+          <div class="btn-grid">
+            <button class="btn" id="expJson" title="把全部数据导出为 JSON 文件，用于备份留底">${icon("down")}导出 JSON</button>
+            <button class="btn" id="expCsv" title="把训练与比赛记录导出为 CSV 表格">${icon("down")}导出 CSV</button>
+            <button class="btn" id="impBtn" title="从 JSON 备份导入，同 ID 记录会合并并覆盖冲突项">${icon("up")}导入 JSON</button>
+            <button class="btn" id="printBtn" title="打印当前页面，或另存为 PDF">${icon("list")}打印 / PDF</button>
+            <button class="btn btn-danger btn-wide" id="wipeBtn" title="删除本机保存的全部数据，无法恢复">${icon("trash")}清空全部数据</button>
             <input type="file" id="impFile" accept=".json,application/json" hidden>
-            <button class="btn" id="printBtn">${icon("list")}打印 / 存 PDF</button>
-            <button class="btn btn-danger" id="wipeBtn" style="margin-left:auto">${icon("trash")}清空全部数据</button>
           </div>
           <div class="hintline" style="margin-top:12px">导入会合并同 ID 记录并覆盖冲突项；建议先导出当前数据留底。</div>
         </div>
@@ -5390,6 +5548,87 @@ function toggleTheme(){
 }
 
 /* ------------------------- 15. 全局交互 ------------------------- */
+
+/* ---------- 统计范围下拉 ----------
+   档位只在这里定义一份：菜单项、按钮标签、合法值校验全部由它派生，
+   免得出现"加了档位但标签忘了改"这种两边对不上的事。 */
+const RANGE_OPTS = [
+  { v:30,  t:"近 30 天" },
+  { v:90,  t:"近 90 天" },
+  { v:365, t:"近 1 年"  },
+  { v:0,   t:"全部记录" }   // 0 = 不限；inRange() 里是 `if(!days) return true`
+];
+const TICK_SVG = `<svg class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>`;
+
+function rangeValid(v){ return RANGE_OPTS.some(o => o.v === +v); }
+function rangeText(v){
+  const o = RANGE_OPTS.find(x => x.v === +v);
+  return o ? o.t : "近 90 天";
+}
+function rangeMenuOpen(){ const m = $("#rangeMenu"); return !!m && !m.hidden; }
+
+/* 只改标签和选中态，不重建 DOM —— 面板开着时切选项不能重绘，否则会闪一下 */
+function syncRangeUI(){
+  const lab = $("#rangeLabel");
+  if(lab) lab.textContent = rangeText(state.settings.range);
+  const m = $("#rangeMenu");
+  if(m && !m.hidden){
+    $$(".range-opt", m).forEach(el => {
+      const on = +el.dataset.range === +state.settings.range;
+      el.classList.toggle("on", on);
+      el.setAttribute("aria-selected", String(on));
+    });
+  }
+}
+function closeRangeMenu(){
+  const m = $("#rangeMenu"), b = $("#rangeBtn");
+  if(m) m.hidden = true;
+  if(b) b.setAttribute("aria-expanded", "false");
+}
+function openRangeMenu(){
+  const m = $("#rangeMenu"), b = $("#rangeBtn");
+  if(!m || !b) return;
+  m.innerHTML = RANGE_OPTS.map(o => {
+    const on = o.v === +state.settings.range;
+    return `<button class="range-opt${on ? " on" : ""}" type="button" role="option"`
+      + ` aria-selected="${on}" data-range="${o.v}"><span>${o.t}</span>${TICK_SVG}</button>`;
+  }).join("");
+  $$(".range-opt", m).forEach(el => el.onclick = () => {
+    setRange(+el.dataset.range);
+    closeRangeMenu();
+    b.focus();                       // 焦点还给触发键，键盘用户不会掉进虚空
+  });
+  m.hidden = false;
+  b.setAttribute("aria-expanded", "true");
+  const cur = $(".range-opt.on", m);
+  if(cur) cur.focus();               // 焦点落在当前项，之后 Tab / Enter 都是原生行为
+}
+function setRange(v){
+  if(!rangeValid(v)) return;
+  state.settings.range = +v;
+  syncRangeUI();
+  save();
+  if(currentPage === "dashboard") refresh();
+}
+function initRangePick(){
+  const b = $("#rangeBtn");
+  if(!b) return;
+  /* 老数据可能压根没存过 range，或存着已下线的档位。统一兜回 90 ——
+     否则按钮显示默认文案、数据却按另一个范围算，两边对不上。 */
+  if(!state.settings) state.settings = {};
+  if(!rangeValid(state.settings.range)) state.settings.range = 90;
+  syncRangeUI();
+  b.onclick = e => { e.stopPropagation(); rangeMenuOpen() ? closeRangeMenu() : openRangeMenu(); };
+  /* 点面板外任意处关掉。用 mousedown 而非 click：click 要等抬起，
+     拖选文字后松手也会误判成"点了外面"。 */
+  document.addEventListener("mousedown", e => {
+    if(rangeMenuOpen() && !e.target.closest("#rangePick")) closeRangeMenu();
+  });
+  document.addEventListener("keydown", e => {
+    if(e.key === "Escape" && rangeMenuOpen()){ closeRangeMenu(); b.focus(); }
+  });
+}
+
 function bindGlobal(){
   document.addEventListener("click", e => {
     const navBtn = e.target.closest("[data-page]");
@@ -5403,13 +5642,7 @@ function bindGlobal(){
   $("#quickAdd").onclick = () => quickMenu();
   $("#fab").onclick = () => quickMenu();
 
-  $$("#rangeSeg button").forEach(b => b.onclick = () => {
-    $$("#rangeSeg button").forEach(x => x.classList.remove("on"));
-    b.classList.add("on");
-    state.settings.range = +b.dataset.range;
-    save();
-    if(currentPage === "dashboard") refresh();
-  });
+  /* 统计范围下拉的事件在 initRangePick() 里绑（它要管菜单开合，不只是取值） */
 
   document.addEventListener("keydown", e => {
     if(e.target.matches("input,textarea,select")) return;
@@ -5593,8 +5826,7 @@ function boot(){
   renderBrand();
   applyAppIcon();
   initPWA();
-  const rng = (state.settings && state.settings.range) || 90;
-  $$("#rangeSeg button").forEach(b => b.classList.toggle("on", +b.dataset.range === rng));
+  initRangePick();
   bindGlobal();
 
   const h = location.hash.replace("#", "");

@@ -158,8 +158,9 @@
 
 ## 交互提示
 
-- 桌面端：左侧导航 + 顶部统计范围切换（30 天 / 90 天 / 1 年 / 全部）。侧边栏按「总览 / 记录 / 成长 / 系统」分组，列出全部页面。
-- 移动端：底部标签栏只保留 4 个高频入口（**总览 / 记录 / 技术 / 目标**）+ **「更多」**；搭档档案、对手档案、训练日记、个人设置收进「更多」贴底面板。右下角悬浮「+」快速记录。
+- 桌面端：左侧导航 + 顶部统计范围下拉（近 30 天 / 近 90 天 / 近 1 年 / 全部记录）。侧边栏按「总览 / 记录 / 成长 / 系统」分组，列出全部页面。
+- 移动端：底部**悬浮导航（浮岛）**只保留 4 个高频入口（**总览 / 记录 / 技术 / 目标**）+ **「更多」**；搭档档案、对手档案、训练日记、个人设置收进「更多」贴底面板。右下角悬浮「+」快速记录。
+- 浮岛导航的契约：左右内缩 12px、离屏底 10px（safe-area 放在 bottom 里，home indicator 区域露出页面背景），墨色描边 + `--r-lg` 圆角 + `0 4px 0 var(--ink)` 实体底影 —— 与 `.modal` / `.range-menu` / `.fab` 是同一套「贴纸」语言；毛玻璃保留，内容从球下面滚过。选中项带 `--accent-soft` pill 高亮，五个 tab 均分等宽。FAB 的 `bottom` 跟随浮岛顶（84px + safe-area），`.view` 的移动端 `padding-bottom` 覆盖浮岛占位（96px + safe-area）。
 - 移动端导航由 `PAGES` 的 `inMore` 标记驱动：不标 `inMore` 的可见页面自动进底部 Tab，标注的进「更多」面板。两者并集恒等于全部可见页面，**新增页面不可能在移动端消失**（有回归断言兜底）。Tab 短标签用独立的 `short` 字段（2 字且全局唯一），避免「训练比赛 / 训练日记」都被截成「训练」。
 - 快捷键：按 `n` 快速新建记录；弹窗内按 `Esc` 关闭。
 - 主题：左下角按钮切换浅色 / 深色，偏好会被记住。
@@ -175,11 +176,34 @@ node tests/run_assess_tests.cjs   # 自评标准与表单（32 项）
 node tests/run_insight_tests.cjs  # 短板诊断 + 练习库 + 反臃肿守卫（30 项）
 node tests/run_pwa_tests.cjs      # 角色几何 + 图标 + manifest/sw/icons 文件级校验（40 项）
 node tests/run_pwa_e2e.cjs        # 真浏览器端到端：可安装性 / SW / 离线（23 项）
+node tests/run_header_tests.cjs   # 标题栏布局 + 统计范围下拉（58 项）
+node tests/run_cardhead_tests.cjs # 卡片头排版：标题单行 + 三者不重叠（43 项）
+node tests/run_radar_tests.cjs    # 雷达图轴标签：唯一 / 不截断 / 不重叠（51 项）
+node tests/run_btnrow_tests.cjs   # 数据管理按钮组：等宽网格 / 不溢出 / 无参差（130 项）
+node tests/run_floatnav_tests.cjs # 悬浮导航：浮岛形态 / tab 均分 / FAB 不相撞（61 项）
 ```
 
 前六个脚本可在无浏览器环境下运行（内置极简 DOM 桩），合计 **325 项断言全绿**；
-`run_pwa_e2e.cjs` 会自己起静态服务 + 起无头 Edge，通过 DevTools 协议做**浏览器级**验证
-（找不到浏览器就跳过，不算失败），**23 项全绿**。
+后七个会自己起静态服务 + 起无头 Edge，通过 DevTools 协议做**浏览器级**验证
+（找不到浏览器时只跑静态段，不算失败），合计 **366 项全绿**。
+
+`run_header_tests.cjs` 盯的是一个真实报过的 bug：360px 手机上「4 个周期胶囊 + 记录按钮」
+把 `<h1>` 压到折行，「仪表盘」被拆成「仪表 / 盘」并溢出 62px 高的标题栏。它不靠肉眼，
+全部用可量化判据 —— `Range.getClientRects().length == 1` 证明标题只占一行、
+`topbar.scrollWidth <= clientWidth` 证明标题栏内部没溢出、
+`documentElement.scrollWidth <= innerWidth` 证明整页没有横向滚动条，
+并且刻意切到**标题最长**的「目标里程碑」（5 字）去测最坏情况。
+视口用 CDP 的 `Emulation.setDeviceMetricsOverride` 精确设定（360 / 320 / 1240 三档），
+绕开了 `--window-size` 会被钳制到 504px 的老坑；顺带断言四个档位行高完全一致，
+防止将来有人给选中态加 `border` 把列表行距搞歪。
+
+`run_cardhead_tests.cjs` 是标题栏那套的横向延伸，覆盖**全部卡片头**而非抽样：
+遍历 8 个可见页面的每一个 `.card-head`（6 档视口 × 23 个 = 138 次），
+逐条判 `h3` 文本的 client rects 是否为 1 行、`h3`/`.hint`/`.right` 三者矩形是否相交、
+头部是否横向溢出、整页是否出现横向滚动条。违规项**聚合上报**（只报一条汇总，
+附上具体是哪一页的哪张卡），比逐项 `ok()` 信息密度高得多。
+另外它顺手守着结构白名单：卡片头的直接子元素只能是 `h3` / `.hint` / `.right` 三种——
+多塞第四个会打乱窄屏的网格定位（描述靠 `grid-column:1/-1` 跨列、操作区靠 `grid-row:1` 固定）。
 
 `run_pwa_tests.cjs` 守的是「改角色别把图标忘掉」：它断言图标与小羽共用同一份本体几何、
 羽裙顶边必须正好 7 段羽尖、表情锚点（软木托 `translate(60,99)` + 眼 `y=105`）不许漂移、
@@ -189,6 +213,13 @@ node tests/run_pwa_e2e.cjs        # 真浏览器端到端：可安装性 / SW / 
 
 `run_pwa_e2e.cjs` 不写死任何结论，全部问浏览器自己要：清单解析结果、安装判据、SW 是否接管、
 缓存里到底有什么、断网后页面还剩几项导航。
+
+`run_radar_tests.cjs` 盯的是「雷达图上出现了两个一模一样的『发球』」。它有一个特别之处：
+**判据全部取自实际渲染出的 SVG 标签**（`svg.querySelectorAll("text")`），而不是在 Node 侧
+按名字推算一份期望值 —— 因为这条 bug 当年正是被「测试复刻了实现里的同一行裁剪」放过去的。
+它同时守着**同源陷阱**：静态段断言 `run_render_tests.cjs` 里不再出现 `replace(/（…/)` 这种
+构造期望值的方式。另外它还区分「全 0（一次都没打过）」与「全打 1 分（真的打得差）」——
+前者走空状态，后者必须照常画出多边形。
 
 其中 `run_insight_tests.cjs` 的第 5 节是**反臃肿守卫**：它逐条断言被移除的记分能力（`scoreboard` / `sbTally` / `roundsAggregate` / `marksToSeq` / `demoSeq` / `roundsBlockHTML` / `.sb-*` 样式 / `rounds` 字段 / 「逐分」文案 …）在源码里**不存在**，同时断言诊断卡仍然可用。这样删除结果被锁死，不会在某次改动里悄悄回流。
 
@@ -256,6 +287,177 @@ node tests/run_pwa_e2e.cjs        # 真浏览器端到端：可安装性 / SW / 
 - 头像在 `AV_MAP` + `AV_HAIR` / `AV_BACK` / `AV_FACE` / `AV_ACC` 四张槽位表里：加一款 = `AV_MAP` 加一行，加一种发型/配件 = 对应槽位表加一个函数。列表与详情统一走 `avatarHTML(姓名, 颜色, key)`。
 - 若想换成真正的圆体中文（如站酷快乐体），只需在 `<head>` 加一行字体引入，并把 `--font-display` 的首位改成该字体族即可 —— 当前默认不引入是为了保证**零依赖与离线可用**。
 
+## 标题栏与统计范围下拉
+
+### 曾经的 bug：窄屏标题被挤到折行
+
+360px 手机上，标题栏并排着「30 天 / 90 天 / 1 年 / 全部」四个胶囊（约 210px）加一个「+ 记录」，
+留给 `<h1>` 的空间不够，`仪表盘` 被拆成「仪表 / 盘」两行、溢出 62px 高的标题栏，整个顶部错位。
+
+根因不是样式写错，而是 `h1`、副标题、右侧操作区**都是可收缩的 flex item**，谁都没声明「我不许折行」。
+
+修法分两层：
+
+| 层 | 做法 | 为什么 |
+|---|---|---|
+| 结构 | 4 个胶囊 → 1 个下拉，宽度 210px → 106px | 一次性收掉最吃宽度的东西 |
+| 约束 | `h1` 加 `white-space:nowrap` + `text-overflow:ellipsis`；`.topbar-actions` 加 `flex:0 0 auto` | 标题**永远**不折行，最多省略号；操作区不参与收缩 |
+
+只做前者是碰运气 —— 以后往标题栏里再加任何东西，折行就会复发。约束必须一起加，测试里也锁住了。
+
+### 为什么自绘下拉，而不是 `<select>`
+
+原生 `<select>` 展开后的列表是**系统弹层**，圆角/描边/投影/选中高亮一律改不了。
+收起状态下把它伪装成项目风格很容易（`appearance:none` + 自绘箭头），
+但点开的一瞬间会弹出系统白框，和「墨色描边 + 大圆角 + 糖果色」的语言完全脱节。
+
+自绘方案 = 一个迷你 `.btn` + 一张「迷你卡片」，**不引入任何新色值**：
+
+| 部件 | 复用的既有令牌 |
+|---|---|
+| 触发键 | 同 `.btn`：`--border-strong` 描边、`--bg-elev` 底，hover 转 `--bg-hover` + `--ink` 描边 |
+| 展开面板 | 同 `.modal`：`1.5px solid var(--ink)` 描边 + `--r` 圆角 + `--shadow-lg` |
+| 选中项 | 同 `.tag-accent`：`--accent-soft` 底 + `--accent` 文字 + 对勾 |
+| 悬停项 | 同 `.btn:hover`：`--bg-hover` |
+
+两个容易被忽略的对齐细节：
+
+- **选中态用 `inset box-shadow` 而不是 `border`**。加 border 会让选中项比其它项高 3px，
+  列表行距立刻不齐（实测从 `37/37/37/37` 变成 `37/40/37/37`）。
+- **焦点环要内缩**。全局 `:focus-visible` 是 `3px + offset 2px`，向外扩会正好填满面板 padding，
+  让当前项的可见边界比别项大一圈；这里单独把 `outline-offset` 收到 `-3px`。
+
+### 档位只有一份定义
+
+`RANGE_OPTS` 是唯一来源 —— 菜单项、按钮标签、合法值校验全部由它派生，
+新增档位只改这一处，不会出现「加了档位但标签忘了改」。
+
+启动时若存着的档位非法（老数据没存过，或存着已下线的值），一律兜回 90 天并写回 state。
+这里踩过一个坑：原来写的是 `(state.settings.range) || 90`，而 `0` 恰好是「全部记录」的合法值，
+于是被当 falsy 读成 90 —— 界面显示「近 90 天」、数据却按全部统计，两边静默对不上。
+现在改成显式判断，并有用例锁住「存 0 后重载，标签仍是「全部记录」」。
+
+### 窄屏取舍
+
+- **≤340px**（iPhone 5 / SE 一代的 320px）：把「+ 记录」收成纯图标。功能不丢，右下角 FAB 是同一个入口。
+- **360px 及以上**：保留完整文案 —— 实测还有 34px 余量，不必牺牲可读性。
+- 自绘按钮不是表单控件，**不触发 iOS「字号 < 16px 则聚焦缩放整页」**那套行为，字号可放心压到 12.5px。
+
+## 卡片头排版：标题永不折行
+
+### 同一个病根
+
+标题栏那个 bug 修完不久，卡片头又栽在同一件事上：360px 手机上「分项战绩」被拆成
+「分项战 / 绩」、「水平趋势」被拆成「水平趋 / 势」，描述也被挤成两行。
+
+根因一模一样 —— `.card-head` 里 `h3` / `.hint` / `.right` **三个槽位都是可收缩的 flex item**，
+谁都没声明「我不许折行」。中文的最小内容宽度只有一个字，标题因此能被压到 3 个字宽再折行。
+算一下差多少：360px 屏上「标题 + 描述 + 查看记录」并排要 **310px**，卡片内可用只有 **297px**。
+
+### 修法分两层，缺一不可
+
+| 层 | 做法 | 为什么必须做 |
+|---|---|---|
+| 摘出可收缩项 | `h3` 加 `flex:0 0 auto` + `white-space:nowrap`，`.right` 也加 `flex:0 0 auto` | 标题**永远**单行、按钮文字不被压折；只剩 `.hint` 承担收缩 |
+| 窄屏重排 | ≤560px 把 `.card-head` 改成两行网格：第一行「标题 + 操作」，第二行描述 `grid-column:1/-1` 跨满整行 | 描述换行后拿到**整行宽度**，原本 13 字的文案反而能单行放下 |
+
+只做第一层是「标题保住了、描述被压成竖排」；只做第二层则宽屏白白多占一行。
+两层一起，才是「标题单行 + 描述完整 + 按钮不折」。
+
+### 两个不显眼但关键的细节
+
+- **网格第一列的 min 必须用 `min-content`，不能是 `0`。** `1fr` 只承担「剩余空间」，
+  而 320px 屏上「自评记录」卡右侧塞了两个按钮（补记单项 + 开始自评，共 205px），
+  剩余只剩 48px —— 允许压到 0 的话标题立刻被挤折（第一版就是这么挂的）。
+  改成 `minmax(min-content,1fr)` 后标题先拿到需要的整宽，压力转给右侧：
+  `.right` 带 `flex-wrap:wrap`，装不下就两个按钮竖排，而**不会**横向溢出。
+- **没有描述时第二行不占位**（网格空轨道高度为 0）：「个人档案」这类只有标题的卡片头
+  仍是单行高度（实测 49px vs 带描述的 81px）；宽屏则完全不受影响（实测 62px 单行）。
+
+对照图是**同一位置**的两版截图（before 的位置由脚本反查文档坐标对齐）：
+`preview-cardhead-before-360.png` 里「水平趋势 / 综合评分（技术 / 体能 / 意识 × 近期表现）」
+各自折成两行，`preview-cardhead-360.png` 里两者都单行。
+以后要调只动 `.card-head` 那几条：间距走 `padding` / `column-gap` / `row-gap`，
+两行阈值走 `@media(max-width:560px)`。**别给 `h3` 加宽度限制** —— 它是硬约束，不是弹性项。
+
+## 雷达图轴标签：由数据决定，不由字符串裁剪猜
+
+### 曾经的 bug：两个「发球」
+
+能力雷达上出现了**两根完全同名、无法区分**的轴。根因是标签生成时对名字做了运行时裁剪：
+
+```js
+/* 错：削掉括号 → 「发球（小球）」和「发球（高远）」同化为「发球」 */
+name: t.name.replace(/（.*?）/, "")
+
+/* 也曾错过：按字数切（仪表盘那处）→ 切出「发球（小」这种半截括号 */
+name: t.name.length > 4 ? t.name.slice(0, 4) : t.name
+```
+
+两种写法都错在同一件事上：**把「显示成什么」交给字符串函数去猜**。名字里只要有括号、
+或者两个字的前缀相同（两个发球、三个反手），猜法就一定出错 —— 换一种猜法只是换一种错法。
+
+### 修法：显式声明短标签
+
+每个技术项加一个 `short`：语义与 `name` 等价、**彼此唯一**、长度 ≤4 字（雷达图是全应用最窄的标签位）。
+
+| id | `name`（完整名，用于列表/表单/评分标准） | `short`（雷达图轴标签） |
+|---|---|---|
+| `serve_short` | 发球（小球） | 小球发球 |
+| `serve_long` | 发球（高远） | 高远发球 |
+| `backhand_rear` | 反手后场球 | 反手后场 |
+| `backhand_drive` | 反手平抽挡 | 反手平抽 |
+| `backhand_net` | 反手网前球 | 反手网前 |
+
+其余 13 项两者相同。两处雷达调用点（仪表盘 `#radarChart`、技术评估 `#skillRadar`）
+统一读 `t.short`，**不再有任何 `.replace` / `.slice`**。
+
+### 顺手修掉：全 0 时的塌缩多边形
+
+自评锚点最低是 1 分，**0 分不是合法自评值** —— 所以「所有轴都是 0」等价于「一次都没打过」。
+但原实现照样画数据多边形，结果是塌缩在圆心上的一个点，看着像图坏了（用户截图里就是这个）。
+现在这种情况走空状态并给出下一步：*「还没有自评记录 —— 用同一套标准把 18 个专项打一次分」*。
+判据是 `items.some(it => +it.value > 0)`，因此**真的打了 1 分不会被误判成没数据**（有用例锁着）。
+
+### 这个 bug 为什么能活过两轮测试
+
+`run_render_tests.cjs` 里原先那条标签用例是这样写的：
+
+```js
+const short = x.name.replace(/（.*?）/, "");   // ← 复刻了实现里的同一行
+assert(radar.includes(short), `雷达图缺少 ${short}`);
+```
+
+**测试用实现的方式推算期望值，于是重名了也永远全绿。** 这比 bug 本身更值得记：
+自证式断言 = 没有断言。现在那条用例改成从实际渲染出的 SVG 里取标签，断言「数量对、两两唯一」；
+`run_radar_tests.cjs` 还在静态段专门盯着 `run_render_tests.cjs` 不许退回这种写法。
+
+## 数据管理按钮组：等宽网格
+
+`flex + wrap` 下按钮宽度由文案长度决定 —— 换行点随机、每行右端参差
+（实测 360px 两行右留白 7 / 37 不齐，320px 直接碎成五行一行一个）。
+改成 `.btn-grid`（2 列网格，≥640px 四列），「清空全部数据」用 `.btn-wide` 独占一行靠右 ——
+危险操作与普通操作分离，宽度不再靠文案长度碰运气。配套约定：**同组按钮文案统一「动作 + 格式」**（导出 JSON / 导出 CSV / 导入 JSON / 打印 PDF），长度接近网格才不会一胖一瘦；精简后的短文案用 `title` 补全语义。
+`run_btnrow_tests.cjs` 全量盯：每按钮装得下内容（自然宽度 <= 实宽）、每行贴齐容器两侧、
+四按钮两两等宽、换行结构恒为 `[2,2,1]`（宽屏 `[4,1]`），另有多加一个按钮不重排、
+深色主题不塌两条扩展用例。
+
+## 悬浮导航（浮岛 tabbar）
+
+底部导航从「全宽贴底的 bar」改为「左右内缩 12px、离屏底 10px 的圆角浮岛」——
+不是换个 border-radius 就完事，牵动四处：
+
+| 部件 | 改动 | 原因 |
+|---|---|---|
+| `.tabbar` | 贴底 → 浮岛；`--border` 顶边 → `--ink` 四边描边 + `0 4px 0 var(--ink)` 实体底影 | 与 `.modal` / `.range-menu` / `.fab` 同一套「贴纸」语言；毛玻璃保留，内容从球下面滚过 |
+| `.tab` | 选中态加 `--accent-soft` pill 背景 + `--r-sm` 圆角 | 纯变色在浮岛上存在感不够；pill 与圆角之间留 5px 呼吸 |
+| `.fab` | `bottom` 74px → 84px（+safe-area） | 浮岛顶从 60 抬到 ~70px，不跟着抬会压进球里 |
+| `.view` | 移动端 `padding-bottom` 88px → 96px + safe-area | 浮岛占位变了，最后一条内容要能滚出来 |
+
+`run_floatnav_tests.cjs` 的判据全部来自真实几何：`bottomGap >= 8` 证明浮岛真的浮着、
+五个 tab 两两等宽等高、文字 `getClientRects()` 单行、FAB 底边 <= 浮岛顶边（不相撞）、
+「更多」sheet 弹出时 mask 覆盖浮岛且 z-index 更高（100 > 50）。
+
 ## 网页图标与可安装（PWA）
 
 ### 图标
@@ -285,10 +487,10 @@ node tests/run_pwa_e2e.cjs        # 真浏览器端到端：可安装性 / SW / 
 
 ## 技术说明
 
-- 单文件 HTML，约 299 KB，内含全部 CSS 与 JavaScript（PWA 的三个伴随文件不含在内，也不被读取）。
+- 单文件 HTML，约 314 KB，内含全部 CSS 与 JavaScript（PWA 的三个伴随文件不含在内，也不被读取）。
 - 图表为**自研原生 SVG 渲染**（折线 / 柱状 / 雷达 / 环形 / 火花线），无任何第三方库。
-- 响应式断点：`1080px`（统计卡降列）、`920px`（切换为移动端导航，所有栅格堆为单列）、`560px`（紧凑间距）。
+- 响应式断点：`1080px`（统计卡降列）、`920px`（切换为移动端导航，所有栅格堆为单列）、`560px`（紧凑间距 + **卡片头改两行**）、`340px`（顶栏按钮收成图标）。
 - **栅格列宽一律用类名，禁止内联 `grid-template-columns`**：内联样式优先级高于样式表，会顶掉 `@media(max-width:920px)` 的单列堆叠规则，导致小屏卡片被压成两列、标题竖排。非等宽列用 `.ratio-16-10` / `.ratio-13-10` / `.ratio-10-12`，断点内已一并覆盖（`run_render_tests.cjs` 有断言兜底）。**唯一例外是头像网格 `.av-grid`**：它用 `repeat(auto-fill, minmax(58px,1fr))`，靠换行自然堆叠，不需要（也不该）写单列规则。
 - **反臃肿约定**：新能力一律"挂载"到既有页面、复用既有的 `card` / `stat` / `grid` / 按钮组件，不新增页面、不新增顶级数据集合、不引入新的颜色体系（全部走既有 CSS 令牌，深浅两套主题自动适配）。新增数据的默认形态是**既有集合上的一个可选字段**，而不是新建一个集合。诊断卡和头像库都是这条约定的产物：诊断只做计算（`§4b` 区块**不生成任何 DOM**），头像只做生成（16 款收敛成 1 个通用半身像 + 4 个可复用槽位），渲染全部复用既有组件。
 - 数据模型带 `version` 字段与 `migrate()` 容错：v1（单打为主）升级到 v2（双打）时**不丢任何历史数据**，会自动推断项目类型、把旧的 `opponent` 迁移为 `opponents[0]`、并回填搭档与对手档案。
-- 预览图：`preview-mascot.png`（小羽 8 表情 + 尺寸阶梯 132/104/64/42/26px）、`preview-brand.png`（应用图标 4 张 + 深底与圆形裁切 + 侧栏品牌标 + 8 张场景插画）、`preview-illos.png`（场景插画放大对照）、`preview-install.png`（设置页的「安装到桌面」卡片）、`preview-empty.png`（空状态插画）。历史预览：`preview-dashboard.png`（仪表盘）、`preview-dark.png`（深色仪表盘）、`preview-sessions.png`（训练比赛）、`preview-skills.png`（技术评估 + 诊断卡）、`preview-session-form.png`（新建记录表单）、`preview-partners.png`（搭档档案：含手动添加、0 场「还没打过」的行）、`preview-rivals.png`（对手档案：组合 / 单人 / 0 场「还没交手」三种行）、`preview-avatars.png`（16 款头像：42px 实拍 + 放大 + 兜底对照）、`preview-avatar-picker.png`（头像选择器）、`preview-assess.png`（专项自评表单）、`preview-assess-dark.png`（深色自评）、`preview-criteria.png`（评分标准）、`preview-mobile-modules.png`（移动端四模块修复前后对照）、`preview-mobile-nav.png`（移动端底部导航与「更多」面板）。
+- 预览图：`preview-floatnav-before-360.png` / `preview-floatnav-360.png`（悬浮导航：全宽贴底 bar → 圆角浮岛 + pill 高亮，FAB 悬在浮岛右上）、`preview-floatnav-dark-360.png`（深色浮岛）、`preview-floatnav-sheet-360.png`（「更多」面板弹出时盖住浮岛）、`preview-floatnav-390.png`、`preview-btnrow-before-360.png` / `preview-btnrow-360.png`（数据管理按钮组：flex 参差 → 等宽网格 + 危险按钮独立靠右）、`preview-btnrow-320.png` / `preview-btnrow-414.png` / `preview-btnrow-640.png`（两列 → 四列断点两侧）、`preview-btnrow-dark-360.png` / `preview-btnrow-desktop.png`、`preview-radar-before-360.png` / `preview-radar-360.png`（雷达图轴标签：同数据下的前后对照 —— 前者顶部是两个「发球」，后者是「小球发球」「高远发球」）、`preview-radar-none-before-360.png` / `preview-radar-none-360.png`（无自评数据：前者塌缩成圆心一个点，后者走空状态并说明下一步）、`preview-radar-desktop.png`（宽屏 18 轴全单行不重叠）、`preview-cardhead-360.png` / `preview-cardhead-before-360.png`（卡片头两行重排，**同一滚动位置**的前后对照）、`preview-cardhead-390.png`、`preview-cardhead-skills-360.png` / `preview-cardhead-skills-320.png`（「自评记录」卡右侧两个按钮：360px 并排、320px 自动竖排）、`preview-cardhead-sessions-360.png`、`preview-cardhead-desktop.png`（宽屏仍单行）、`preview-cardhead-dark-360.png`、`preview-header-360.png` / `preview-header-menu.png` / `preview-header-320.png` / `preview-header-dark.png` / `preview-header-desktop.png`（标题栏与统计范围下拉）、`preview-mascot.png`（小羽 8 表情 + 尺寸阶梯 132/104/64/42/26px）、`preview-brand.png`（应用图标 4 张 + 深底与圆形裁切 + 侧栏品牌标 + 8 张场景插画）、`preview-illos.png`（场景插画放大对照）、`preview-install.png`（设置页的「安装到桌面」卡片）、`preview-empty.png`（空状态插画）。历史预览：`preview-dashboard.png`（仪表盘）、`preview-dark.png`（深色仪表盘）、`preview-sessions.png`（训练比赛）、`preview-skills.png`（技术评估 + 诊断卡）、`preview-session-form.png`（新建记录表单）、`preview-partners.png`（搭档档案：含手动添加、0 场「还没打过」的行）、`preview-rivals.png`（对手档案：组合 / 单人 / 0 场「还没交手」三种行）、`preview-avatars.png`（16 款头像：42px 实拍 + 放大 + 兜底对照）、`preview-avatar-picker.png`（头像选择器）、`preview-assess.png`（专项自评表单）、`preview-assess-dark.png`（深色自评）、`preview-criteria.png`（评分标准）、`preview-mobile-modules.png`（移动端四模块修复前后对照）、`preview-mobile-nav.png`（旧版贴底导航与「更多」面板，已被浮岛取代）。
